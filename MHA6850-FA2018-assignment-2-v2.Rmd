@@ -1,0 +1,204 @@
+---
+title: 'MHA 6850 Fall 2018 Assignment 2: Patient Satisfaction with Hospitality'
+author: "Lynd Bacon, lynd.bacon@hsc.utah.edu"
+output:
+  pdf_document:
+    toc: no
+  html_notebook:
+    toc: yes
+  html_document:
+    toc: yes
+---
+
+Creative Commons CC by 4.0 Lynd Bacon & Associates, Ltd.
+
+This is your second, and last, assignment for this course!
+
+## Background
+
+Satisfaction and experience data were collected by surveying recent inpatients at a community hospital. The objective is to understand how reported satisfaction is related to ways these patients experienced aspects of their data having do to with interactions with the staff, and with "hospitality" dimensions like meal quality and room comfort.  The measured aspects were identified in prior research.  They selected from a larger set of measured experiences of interest to both the administration and the care staff.
+
+## What Was Measured
+
+Nine measures were collected from each patient surveyed.  They were as follows. q1 through q9 are how these measures are named in the data set: 
+
+* q1: Satisfaction with hospital stay, measured on a 1 to 10 scale, where:  
+  * 1 = very dissatisfied
+  * 5 = a little dissatisfied
+  * 6 = a little satisfied
+  * 10 = very satisfied
+* q2: Nurses listened to me
+  * 1 = never, 10 = always
+* q3: Nurses explained things to me
+  * 1 = never, 10 = always
+* q4: staff were courteous  
+  * 1 = never, 10 = always  
+* q5: meals were appetizing
+  * 1 = never, 10 = always
+* q6: Doctors listened to me
+  * 1 = never, 10 = always  
+* q7 doctors explained things to me  
+  * 1 = never, 10 = always
+* q8: staff was responsive
+  * 1 = never, 10 = always
+* q9: My room allow me to get rest
+  * 1 = never, 10 = always
+  
+## The Data
+
+The data are in the file `patSat.rds`.
+
+## Your Mission
+
+It has a couple of parts.
+
+(1) __EDA__
+
+Input the data, and then "explore" it to understand it.  Look for anomalous values.  Sumarize how the variables are distributed, how they covary.  This is in preparation for the next parts.
+
+```{r}
+patSat<-read_rds('patSat.rds')
+```
+
+```{r}
+names(patSat)
+str(patSat)
+```
+
+```{r}
+colSums(is.na(patSat))
+```
+
+
+```{r}
+summary(patSat[,-1])
+```
+
+```{r}
+round(cor(patSat[-1]),3)
+```
+
+(2) __Cluster Analysis__ Of Patients' perceptions of Personnel and Accommodations
+
+```{r}
+patSat['q2f']<-as.factor(patSat$q2)
+patSat['q3f']<-as.factor(patSat$q3)
+patSat['q4f']<-as.factor(patSat$q4)
+patSat['q5f']<-as.factor(patSat$q5)
+patSat['q6f']<-as.factor(patSat$q6)
+patSat['q7f']<-as.factor(patSat$q7)
+patSat['q8f']<-as.factor(patSat$q8)
+patSat['q9f']<-as.factor(patSat$q9)
+patSat['ptCatF']<-as.factor(patSat$ptCat)
+patSatClean<-patSat[-1]
+
+library(tidyverse)
+patSatClean<-patSat %>%
+  select(2,11:19)
+```
+
+```{r}
+patSatM1<-lm(patSat~.,data=patSatClean)
+summary(patSatM1)
+```
+
+```{r}
+plot(patSatM1)
+```
+
+
+```{r}
+formulaM1=as.formula(patSat~ptCat+q2f+q3f+q4f+q5f+q6f+q7f+q8f+q9f)
+
+typeof(formulaM1)
+```
+
+
+```{r}
+formulaM2=update.formula(formulaM1,~.-q6f+I(q6f==c('8','9','10')))
+formulaM2
+```
+
+```{r}
+patSatM2=lm(formulaM2,data=patSatClean)
+summary(patSatM2)
+```
+
+```{r}
+anova(patSatM2,patSatM1,test="Chisq")
+```
+
+
+The question you are to address is, are there different "types" of inpatient experiences (or mayb types of patients) based on patients' responses to questions q2 through q9? Use k-means clustering and hierarchical clustering, and summarize your "best" clustering solution based on the q1 through q9 data. Summarize your results statistically and/or graphically.
+
+(3) __Predictors of Satisfaction__
+
+```{r}
+library(NbClust)
+km3<-patSatClean %>%
+  kmeans(3)
+```
+
+
+```{r}
+table(km3$cluster)
+```
+
+```{r}
+
+by(patSatClean,km3$cluster,summary)
+
+```
+
+```{r}
+plot(patSatClean[,c('q3f','q4f','q8f','q9f')],col=km3$cluster)
+points(km3$centers,col=1:3,pch=8)
+```
+
+```{r}
+library(cluster)
+```
+
+```{R}
+clusplot(patSatClean[,c('q3f','q4f','q8f','q9f')],clus=km3$cluster)
+```
+
+```{r}
+Q=c('q3f','q4f','q8f','q9f')
+hc1=hclust(daisy(patSatClean[,Q]))
+plot(hc1) 
+```
+
+```{r}
+hc1_3=cutree(hc1,3)
+table(hc1_3)
+```
+
+
+```{r eval=FALSE}
+sil3=silhouette(km3$cluster,daisy(patSatClean[,Q]))
+plot(sil3, nmax=80, cex.names=0.5)
+```
+
+```{r}
+patSatNBest=NbClust(patSat[,c('q3','q4','q8','q9')],min.nc=2,max.nc=10,
+                    method='kmeans',index="gap")
+
+patSatNBest
+```
+
+```{r}
+patSatBestH=NbClust(patSat[,c('q3','q4','q8','q9')],min.nc=2,max.nc=10,
+  method='complete',index="gap")
+chap5NBestH
+```
+
+
+Estimate and evaluate a regression model predicting satisfaction. Use the data for q2 through q9.  Remove from your model any predictors that aren't signficant predictors.  Assess the relative importance of the predictors that are significant based on how "strongly" they predict satisfaction.
+
+## How To Do It
+
+Develop your assignment submission in an R Markdown document.  Describe each step that you take, and interpret your results, in explanatory text.  Upload a pdf version of your Markdown document to Canvas that is _no longer than 15 pages_.  Note that you may not need 15 pages.
+
+Imagine that the purpose of your "work product" is to communicate to stakeholders what you did, and how you did it.  Explain what you did well enough that a co-worker familiar with R and with the problem area could replicate your work to determine whether he or she would get the same results.
+
